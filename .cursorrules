@@ -1,0 +1,57 @@
+# klaviyo-event-pipeline-demo — Cursor context
+
+## What this project is
+A Python event pipeline simulator demonstrating real-time event
+ingestion, fan-out routing, backpressure, and dead-letter queue
+patterns — analogous to Klaviyo's events platform architecture.
+
+This is an interview portfolio project. Code quality and clarity
+matter more than performance optimization.
+
+## Stack + conventions
+- Python 3.12, Pydantic v2, asyncio, pytest
+- uv for dependency management (not pip)
+- Type hints on ALL functions — no untyped code
+- Docstrings on ALL classes and public methods
+- snake_case for variables/functions, PascalCase for classes
+- No external dependencies beyond pydantic and pytest
+- No real Kafka, Redis, or database — in-memory only
+
+## Module responsibilities (do not mix concerns)
+- models.py     → Pydantic schemas ONLY. No business logic.
+- producer.py   → EventProducer class. Emit, validate, throttle.
+- router.py     → EventRouter class. Receive from queue, dispatch.
+- handlers.py   → Handler classes. Each handles its event types.
+- metrics.py    → MetricsCollector class. Track throughput/latency.
+- main.py       → Demo runner. Glues everything together.
+- test_pipeline.py → pytest tests. One test file for the whole project.
+
+## Event types (use these names exactly)
+- placed_order
+- viewed_product
+- abandoned_cart
+- clicked_email
+
+## Key design decisions already made
+1. EventProducer uses asyncio.Queue for the main event queue
+2. EventRouter runs in an async loop, consuming from the queue
+3. Fan-out: router dispatches to ALL registered handlers per event
+4. Backpressure: if queue.qsize() > BACKPRESSURE_THRESHOLD (default 100),
+   producer sleeps for THROTTLE_DELAY_MS before next emit
+5. DLQ: a separate asyncio.Queue; handlers push failed events there
+6. Metrics: dict-based, updated in-place, no external metrics lib
+
+## What NOT to do
+- Do not add external dependencies (no kafka-python, redis, etc.)
+- Do not use print() for logging — use Python logging module
+- Do not use threading — asyncio only
+- Do not add HTTP endpoints or API layers
+- Do not use global state outside MetricsCollector
+- Do not write synchronous handlers — all handlers are async
+
+## Testing conventions
+- Each test function tests ONE behavior
+- Use pytest-asyncio for async tests (add to uv deps if needed)
+- Test names: test__ e.g. test_producer_backpressure
+- Always test the DLQ: invalid events MUST land in DLQ, not be silently dropped
+- Test metrics: throughput and error rate must update after events are processed
