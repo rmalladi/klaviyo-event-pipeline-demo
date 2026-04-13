@@ -1,57 +1,100 @@
 # klaviyo-event-pipeline-demo — Cursor context
 
-## What this project is
-A Python event pipeline simulator demonstrating real-time event
-ingestion, fan-out routing, backpressure, and dead-letter queue
-patterns — analogous to Klaviyo's events platform architecture.
+## Project goal
+Build a clear, interview-quality Python event pipeline simulator that demonstrates:
+- async event ingestion
+- routing / fan-out
+- backpressure
+- dead-letter queue handling
+- basic metrics
 
-This is an interview portfolio project. Code quality and clarity
-matter more than performance optimization.
+This is a portfolio project. Prefer readability, correctness, and clean structure over optimization or framework usage.
 
-## Stack + conventions
-- Python 3.12, Pydantic v2, asyncio, pytest
-- uv for dependency management (not pip)
-- Type hints on ALL functions — no untyped code
-- Docstrings on ALL classes and public methods
-- snake_case for variables/functions, PascalCase for classes
-- No external dependencies beyond pydantic and pytest
-- No real Kafka, Redis, or database — in-memory only
+## Allowed stack
+- Python 3.12
+- asyncio
+- pydantic v2
+- pytest
+- pytest-asyncio
+- logging
+- uv for dependency management
 
-## Module responsibilities (do not mix concerns)
-- models.py     → Pydantic schemas ONLY. No business logic.
-- producer.py   → EventProducer class. Emit, validate, throttle.
-- router.py     → EventRouter class. Receive from queue, dispatch.
-- handlers.py   → Handler classes. Each handles its event types.
-- metrics.py    → MetricsCollector class. Track throughput/latency.
-- main.py       → Demo runner. Glues everything together.
-- test_pipeline.py → pytest tests. One test file for the whole project.
+Do not add any other dependencies.
 
-## Event types (use these names exactly)
+## Coding standards
+- Use type hints on all functions and methods
+- Add docstrings to all classes and all public methods
+- Use snake_case for variables/functions and PascalCase for classes
+- Keep functions small and focused
+- Prefer explicit code over clever abstractions
+
+## File responsibilities
+- models.py: Pydantic models and validation only. No business logic.
+- producer.py: EventProducer only. Responsible for event creation, schema validation, backpressure, and enqueueing.
+- router.py: EventRouter only. Responsible for consuming from the main queue and dispatching each event to all matching handlers.
+- handlers.py: async handler classes only. Responsible for event-specific processing.
+- metrics.py: MetricsCollector only. Responsible for counters and timing metrics.
+- main.py: demo entry point only. Wire up queues, producer, router, handlers, and logging.
+- test_pipeline.py: pytest tests for the project.
+
+Do not move responsibilities across files.
+
+## Fixed event types
+Use these exact event_type values:
 - placed_order
 - viewed_product
 - abandoned_cart
 - clicked_email
 
-## Key design decisions already made
-1. EventProducer uses asyncio.Queue for the main event queue
-2. EventRouter runs in an async loop, consuming from the queue
-3. Fan-out: router dispatches to ALL registered handlers per event
-4. Backpressure: if queue.qsize() > BACKPRESSURE_THRESHOLD (default 100),
-   producer sleeps for THROTTLE_DELAY_MS before next emit
-5. DLQ: a separate asyncio.Queue; handlers push failed events there
-6. Metrics: dict-based, updated in-place, no external metrics lib
+## Required architecture
+- Main queue: asyncio.Queue
+- DLQ: separate asyncio.Queue
+- EventProducer validates events before enqueueing
+- EventRouter runs in an async loop
+- Router fan-outs events to all registered handlers that support the event type
+- All handlers are async
+- No threading
+- No HTTP/API layer
+- No external systems (Kafka, Redis, DB, cloud services)
 
-## What NOT to do
-- Do not add external dependencies (no kafka-python, redis, etc.)
-- Do not use print() for logging — use Python logging module
-- Do not use threading — asyncio only
-- Do not add HTTP endpoints or API layers
-- Do not use global state outside MetricsCollector
-- Do not write synchronous handlers — all handlers are async
+## Error handling rules
+- Schema-invalid events go directly to DLQ from the producer
+- Handler failures do not stop routing to other handlers
+- Handler exceptions must be caught and failed events sent to DLQ
+- Router should log failures with structured context
+- Invalid or failed events must never be silently dropped
 
-## Testing conventions
-- Each test function tests ONE behavior
-- Use pytest-asyncio for async tests (add to uv deps if needed)
-- Test names: test__ e.g. test_producer_backpressure
-- Always test the DLQ: invalid events MUST land in DLQ, not be silently dropped
-- Test metrics: throughput and error rate must update after events are processed
+## Backpressure rules
+- If main_queue.qsize() > BACKPRESSURE_THRESHOLD, producer awaits asyncio.sleep(THROTTLE_DELAY_MS / 1000)
+- Default BACKPRESSURE_THRESHOLD = 100
+- Default THROTTLE_DELAY_MS should be configurable
+
+## Metrics requirements
+MetricsCollector must track at least:
+- events_emitted
+- events_enqueued
+- events_routed
+- events_processed
+- events_failed
+- events_dlq
+- average_processing_latency_ms
+
+Metrics should be dict-based and updated in place.
+
+## Logging rules
+- Use Python logging only
+- No print()
+- Include event_id and event_type in error logs when available
+
+## Testing rules
+- Use pytest + pytest-asyncio
+- Each test should verify one behavior
+- Test names should start with test__
+- Must test:
+  - valid event enqueue
+  - schema-invalid event goes to DLQ
+  - router fan-out to multiple handlers
+  - handler failure routes event to DLQ
+  - backpressure causes producer delay
+  - metrics update after processing
+  - router shutdown / cancellation behavior if implemented
