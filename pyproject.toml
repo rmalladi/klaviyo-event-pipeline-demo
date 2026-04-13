@@ -1,0 +1,11 @@
+[project]
+name = "klaviyo-event-pipeline-demo"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "asyncio>=4.0.0",
+    "pydantic>=2.13.0",
+    "pytest>=9.0.3",
+]
