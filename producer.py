@@ -11,7 +11,7 @@ from models import AnyEvent, DeadLetterEvent, create_event
 
 logger = logging.getLogger(__name__)
 
-BACKPRESSURE_THRESHOLD: int = 100
+BACKPRESSURE_THRESHOLD: int = 1000
 THROTTLE_DELAY_SECONDS: float = 0.05
 
 
@@ -41,7 +41,7 @@ class EventProducer:
                 retry_count=0,
             )
             await self.dlq.put(dead_letter_event)
-            self.metrics["dlq_total"] = self.metrics.get("dlq_total", 0) + 1
+            # dlq_total is incremented when DeadLetterHandler records the item (avoids double count on drain).
             logger.debug("Unknown event type routed to DLQ: %s", event_type)
             return False
 
